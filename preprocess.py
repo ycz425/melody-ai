@@ -22,6 +22,22 @@ def durations_acceptable(song: music21.stream.Score, acceptable_durations: list[
         if note.quarterLength not in acceptable_durations:
             return False
     return True
+        
+
+def transpose_to_concert_pitch(song: music21.stream.Score) -> music21.stream.Score:
+    parts = song.getElementsByClass(music21.stream.Part)
+    part0_measures = parts[0].getElementsByClass(music21.stream.Measure)
+    key = part0_measures[0][4]
+
+    if not isinstance(key, music21.key.Key):
+        key = song.analyze('key')
+
+    if key.mode == 'major':
+        interval = music21.interval.Interval(key.tonic, music21.pitch.Pitch('C'))
+    elif key.mode == 'minor':
+        interval = music21.interval.Interval(key.tonic, music21.pitch.Pitch('A'))
+
+    return song.transpose(interval)
 
 
 def preprocess(dataset_path: str):
@@ -31,4 +47,4 @@ def preprocess(dataset_path: str):
 
     for song in songs:
         if durations_acceptable(song, ACCEPTABLE_DURATIONS):
-            pass
+            song = transpose_to_concert_pitch(song)
