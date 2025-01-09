@@ -1,5 +1,6 @@
 import os
 import music21
+import json
 
 
 KERN_DATASET_PATH = 'data/raw/europa/deutschl/test'
@@ -10,7 +11,7 @@ SEQUENCE_LENGTH = 64
 
 def load(dataset_path: str) -> list[music21.stream.Score]:
     songs = []
-    for dirpath, dirnames, filenames in os.walk(dataset_path):
+    for dirpath, _, filenames in os.walk(dataset_path):
         for filename in filenames:
             if filename.endswith('.krn'):
                 songs.append(music21.converter.parse(os.path.join(dirpath, filename)))
@@ -57,7 +58,15 @@ def encode_song(song: music21.stream.Score) -> str:
     return ' '.join(map(str, encoded_song))
 
 
-def preprocess(dataset_path: str, file_name: str) -> None:
+def create_mapping(encoded_songs: str, file_name: str, save_dir: str) -> None:
+    vocabulary = list(set(encoded_songs.split()))
+    mapping = {symbol: index for index, symbol in enumerate(vocabulary)}
+
+    with open(os.path.join(save_dir, f'{file_name}_mapping.json'), 'w') as file:
+        json.dump(mapping, file)
+
+
+def preprocess(dataset_path: str, file_name: str, save_dir: str) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
@@ -71,9 +80,17 @@ def preprocess(dataset_path: str, file_name: str) -> None:
             result.append(song)
             result.extend(['/'] * SEQUENCE_LENGTH)
 
-    with open(os.path.join(SAVE_DIR, file_name), 'w') as file:
-        file.write(' '.join(result))
+    result = ' '.join(result)
+
+    with open(os.path.join(save_dir, f'{file_name}.txt'), 'w') as file:
+        file.write(result)
+
+    create_mapping(result, file_name, save_dir)
+
+
+def main():
+    preprocess(KERN_DATASET_PATH, 'test', SAVE_DIR)
 
 
 if __name__ == '__main__':
-    preprocess(KERN_DATASET_PATH, 'test.txt')
+    main()
