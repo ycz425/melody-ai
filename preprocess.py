@@ -1,10 +1,10 @@
 import os
 import music21
-from music21 import environment
 
 
-KERN_DATASET_PATH = 'data/europa/deutschl/test'
+KERN_DATASET_PATH = 'data/raw/europa/deutschl/test'
 ACCEPTABLE_DURATIONS = {0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0}
+SAVE_DIR = 'data/processed'
 
 
 def load(dataset_path: str) -> list[music21.stream.Score]:
@@ -12,13 +12,13 @@ def load(dataset_path: str) -> list[music21.stream.Score]:
     for dirpath, dirnames, filenames in os.walk(dataset_path):
         for filename in filenames:
             if filename.endswith('.krn'):
-                songs.append(music21.converter.parse(os.path.join(dirpath, filename), format='kern'))
+                songs.append(music21.converter.parse(os.path.join(dirpath, filename)))
 
     return songs
 
 
 def durations_acceptable(song: music21.stream.Score, acceptable_durations: list[float]) -> bool:
-    for note in song.flat.notesAndRests:
+    for note in song.flatten().notesAndRests:
         if note.quarterLength not in acceptable_durations:
             return False
     return True
@@ -43,7 +43,7 @@ def transpose_to_concert_pitch(song: music21.stream.Score) -> music21.stream.Sco
 def encode_song(song: music21.stream.Score) -> str:
     encoded_song = []
 
-    for event in song.flat.notesAndRests:
+    for event in song.flatten().notesAndRests:
         if isinstance(event, music21.note.Note):
             symbol = event.pitch.midi
         elif isinstance(event, music21.note.Rest):
@@ -61,7 +61,15 @@ def preprocess(dataset_path: str):
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
-    for song in songs:
+    for i, song in enumerate(songs):
         if durations_acceptable(song, ACCEPTABLE_DURATIONS):
             song = transpose_to_concert_pitch(song)
             song = encode_song(song)
+
+            with open(os.path.join(SAVE_DIR, f'song{i}.txt'), 'w') as file:
+                file.write(song)
+
+
+if __name__ == '__main__':
+    preprocess(KERN_DATASET_PATH)
+    
