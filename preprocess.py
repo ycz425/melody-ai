@@ -67,6 +67,13 @@ def create_mapping(encoded_songs: str, file_name: str) -> None:
         json.dump(mapping, file)
 
 
+def get_num_classes(data_file_name: str) -> int:
+    with open(os.path.join(SAVE_DIR, f'{data_file_name}_mapping.json'), 'r') as file:
+        mapping = json.load(file)
+
+    return len(mapping)
+
+
 def preprocess(dataset_path: str, file_name: str) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
