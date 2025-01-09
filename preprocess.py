@@ -1,6 +1,7 @@
 import os
 import music21
 import json
+import numpy as np
 
 
 KERN_DATASET_PATH = 'data/raw/europa/deutschl/test'
@@ -66,19 +67,19 @@ def create_mapping(encoded_songs: str, file_name: str, save_dir: str) -> None:
         json.dump(mapping, file)
 
 
-def preprocess(dataset_path: str, file_name: str, save_dir: str) -> None:
+def preprocess(dataset_path: str, file_name: str, save_dir: str, acceptable_durations: set[float], sequence_length: int) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
     result = []
     for song in songs:
-        if durations_acceptable(song, ACCEPTABLE_DURATIONS):
+        if durations_acceptable(song, acceptable_durations):
             song = transpose_to_concert_pitch(song)
             song = encode_song(song)
 
             result.append(song)
-            result.extend(['/'] * SEQUENCE_LENGTH)
+            result.extend(['/'] * sequence_length)
 
     result = ' '.join(result)
 
@@ -88,8 +89,30 @@ def preprocess(dataset_path: str, file_name: str, save_dir: str) -> None:
     create_mapping(result, file_name, save_dir)
 
 
+def get_train_sequences(file_name: str, save_dir: str, sequence_length: int) -> tuple[np.ndarray, np.ndarray]:
+    with open(os.path.join(save_dir, f'{file_name}.txt'), 'r') as file:
+        songs = file.read().split()
+
+    with open(os.path.join(save_dir, f'{file_name}_mapping.json'), 'r') as file:
+        mapping = json.load(file)
+
+    series = [mapping[symbol] for symbol in songs]
+    inputs = []
+    targets = []
+
+    for i in range(len(series) - sequence_length):
+        inputs.append(series[i:i + sequence_length])
+        targets.append(series[i + sequence_length])
+    
+    inputs = np.array([[np.eye(len(mapping))[symbol] for symbol in sequence] for sequence in inputs])
+    targets = np.array(targets)
+
+    return inputs, targets
+
+
 def main():
-    preprocess(KERN_DATASET_PATH, 'test', SAVE_DIR)
+    preprocess(KERN_DATASET_PATH, 'test', SAVE_DIR, ACCEPTABLE_DURATIONS, SEQUENCE_LENGTH)
+    inputs, targets = get_train_sequences('test', SAVE_DIR, SEQUENCE_LENGTH)
 
 
 if __name__ == '__main__':
