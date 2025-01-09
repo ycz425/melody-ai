@@ -17,10 +17,18 @@ def load(dataset_path: str) -> list[music21.stream.Score]:
     return songs
 
 
+def durations_acceptable(song: music21.stream.Score, acceptable_durations: list[float]) -> bool:
+    for note in song.flat.notesAndRests:
+        if note.quarterLength not in acceptable_durations:
+            return False
+    return True
+
+
 def preprocess(dataset_path: str):
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
-
-
+    for song in songs:
+        if durations_acceptable(song, ACCEPTABLE_DURATIONS):
+            pass
