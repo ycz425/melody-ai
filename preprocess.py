@@ -40,6 +40,22 @@ def transpose_to_concert_pitch(song: music21.stream.Score) -> music21.stream.Sco
     return song.transpose(interval)
 
 
+def encode_song(song: music21.stream.Score) -> str:
+    encoded_song = []
+
+    for event in song.flat.notesAndRests:
+        if isinstance(event, music21.note.Note):
+            symbol = event.pitch.midi
+        elif isinstance(event, music21.note.Rest):
+            symbol = 'r'
+
+        steps = int(event.quarterLength / 0.25)
+        encoded_song.append(symbol)
+        encoded_song.extend(['_'] * (steps - 1))
+
+    return ''.join(map(str, encoded_song))
+
+
 def preprocess(dataset_path: str):
     print('Loading songs...')
     songs = load(dataset_path)
@@ -48,3 +64,4 @@ def preprocess(dataset_path: str):
     for song in songs:
         if durations_acceptable(song, ACCEPTABLE_DURATIONS):
             song = transpose_to_concert_pitch(song)
+            song = encode_song(song)
