@@ -1,6 +1,6 @@
 from preprocess import get_train_sequences, get_num_classes
-import json
 import keras
+import os
 
 LOSS_FN = 'sparse_categorical_crossentropy'
 LEARNING_RATE = 0.001
@@ -23,16 +23,16 @@ def build_model(num_units: list[int], num_classes: int, loss_fn: str, learning_r
     return model
 
 
-def train(data_file_name: str, num_units: list[int], learning_rate: float, loss_fn: str, batch_size: int, epochs: int, save_dir: str):
+def train(model_name: str, data_file_name: str, num_units: list[int], learning_rate: float, loss_fn: str, batch_size: int, epochs: int, save_dir: str):
     inputs, targets = get_train_sequences(data_file_name)
     model = build_model(num_units, get_num_classes(data_file_name), loss_fn, learning_rate)
 
     model.fit(inputs, targets, batch_size=batch_size, epochs=epochs)
-    model.save(save_dir)
+    model.save(os.path.join(save_dir, f'{model_name}.h5'))
 
 
 def main():
-    train('erk', NUM_UNITS, LEARNING_RATE, LOSS_FN, BATCH_SIZE, EPOCHS, MODEL_SAVE_DIR)
+    train('erk_model', 'erk', NUM_UNITS, LEARNING_RATE, LOSS_FN, BATCH_SIZE, EPOCHS, MODEL_SAVE_DIR)
 
 
 if __name__ == '__main__':
