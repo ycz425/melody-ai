@@ -8,13 +8,18 @@ SAVE_DIR = 'data/processed'
 
 
 def load(dataset_path: str) -> list[music21.stream.Score]:
-    songs = []
+    scores = []
     for dirpath, _, filenames in os.walk(dataset_path):
         for filename in filenames:
-            if filename.endswith('.krn'):
-                songs.append(music21.converter.parse(os.path.join(dirpath, filename)))
+            if filename.endswith('.krn') or filename.endswith('.abc'):
+                stream = music21.converter.parse(os.path.join(dirpath, filename))
+                if isinstance(stream, music21.stream.Score):
+                    scores.append(stream)
+                elif isinstance(stream, music21.stream.Opus):
+                    for score in stream:
+                        scores.append(score)
 
-    return songs
+    return scores
 
 
 def durations_acceptable(song: music21.stream.Score, acceptable_durations: set[float]) -> bool:
