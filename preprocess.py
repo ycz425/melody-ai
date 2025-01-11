@@ -4,7 +4,7 @@ import json
 import numpy as np
 
 
-KERN_DATASET_PATH = 'data/raw/europa/deutschl/test'
+KERN_DATASET_PATH = 'data/raw/europa/deutschl/erk'
 ACCEPTABLE_DURATIONS = {0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0}
 SAVE_DIR = 'data/processed'
 SEQUENCE_LENGTH = 64
@@ -20,9 +20,9 @@ def load(dataset_path: str) -> list[music21.stream.Score]:
     return songs
 
 
-def durations_acceptable(song: music21.stream.Score, acceptable_durations: list[float]) -> bool:
+def durations_acceptable(song: music21.stream.Score) -> bool:
     for note in song.flatten().notesAndRests:
-        if note.quarterLength not in acceptable_durations:
+        if note.quarterLength not in ACCEPTABLE_DURATIONS:
             return False
     return True
         
@@ -59,60 +59,67 @@ def encode_song(song: music21.stream.Score) -> str:
     return ' '.join(map(str, encoded_song))
 
 
-def create_mapping(encoded_songs: str, file_name: str, save_dir: str) -> None:
+def create_mapping(encoded_songs: str, file_name: str) -> None:
     vocabulary = list(set(encoded_songs.split()))
     mapping = {symbol: index for index, symbol in enumerate(vocabulary)}
 
-    with open(os.path.join(save_dir, f'{file_name}_mapping.json'), 'w') as file:
+    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'w') as file:
         json.dump(mapping, file)
 
 
-def preprocess(dataset_path: str, file_name: str, save_dir: str, acceptable_durations: set[float], sequence_length: int) -> None:
+def get_num_classes(data_file_name: str) -> int:
+    with open(os.path.join(SAVE_DIR, f'{data_file_name}_mapping.json'), 'r') as file:
+        mapping = json.load(file)
+
+    return len(mapping)
+
+
+def preprocess(dataset_path: str, file_name: str) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
     result = []
     for song in songs:
-        if durations_acceptable(song, acceptable_durations):
+        if durations_acceptable(song):
             song = transpose_to_concert_pitch(song)
             song = encode_song(song)
 
             result.append(song)
-            result.extend(['/'] * sequence_length)
+            result.extend(['/'] * SEQUENCE_LENGTH)
 
     result = ' '.join(result)
 
-    with open(os.path.join(save_dir, f'{file_name}.txt'), 'w') as file:
+    with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'w') as file:
         file.write(result)
 
-    create_mapping(result, file_name, save_dir)
+    create_mapping(result, file_name)
 
 
-def get_train_sequences(file_name: str, save_dir: str, sequence_length: int) -> tuple[np.ndarray, np.ndarray]:
-    with open(os.path.join(save_dir, f'{file_name}.txt'), 'r') as file:
+def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
+    with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'r') as file:
         songs = file.read().split()
 
-    with open(os.path.join(save_dir, f'{file_name}_mapping.json'), 'r') as file:
+    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'r') as file:
         mapping = json.load(file)
 
     series = [mapping[symbol] for symbol in songs]
     inputs = []
     targets = []
 
-    for i in range(len(series) - sequence_length):
-        inputs.append(series[i:i + sequence_length])
-        targets.append(series[i + sequence_length])
-    
-    inputs = np.array([[np.eye(len(mapping))[symbol] for symbol in sequence] for sequence in inputs])
+    for i in range(len(series) - SEQUENCE_LENGTH):
+        inputs.append(series[i:i + SEQUENCE_LENGTH])
+        targets.append(series[i + SEQUENCE_LENGTH])
+
+    identity_matrix = np.eye(len(mapping))
+    inputs = np.array([[identity_matrix[symbol] for symbol in sequence] for sequence in inputs])
     targets = np.array(targets)
 
     return inputs, targets
 
 
 def main():
-    preprocess(KERN_DATASET_PATH, 'test', SAVE_DIR, ACCEPTABLE_DURATIONS, SEQUENCE_LENGTH)
-    inputs, targets = get_train_sequences('test', SAVE_DIR, SEQUENCE_LENGTH)
+    preprocess(KERN_DATASET_PATH, 'erk')
 
 
 if __name__ == '__main__':
