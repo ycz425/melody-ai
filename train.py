@@ -28,7 +28,7 @@ def train(model_name: str, data_file_name: str, num_units: list[int], learning_r
     model = build_model(num_units, get_num_classes(data_file_name), loss_fn, learning_rate)
 
     model.fit(inputs, targets, batch_size=batch_size, epochs=epochs)
-    model.save(os.path.join(save_dir, f'{model_name}.h5'))
+    model.save(os.path.join(save_dir, f'{model_name}.keras'))
 
 
 def main():
