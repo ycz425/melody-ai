@@ -23,7 +23,7 @@ def build_model(num_units: list[int], num_classes: int, loss_fn: str, learning_r
     return model
 
 
-def train(model_name: str, data_file_name: str, num_units: list[int], learning_rate: float, loss_fn: str, batch_size: int, epochs: int, save_dir: str):
+def train(model_name: str, data_file_name: str, num_units: list[int], learning_rate: float, loss_fn: str, batch_size: int, epochs: int, save_dir: str) -> None:
     inputs, targets = get_train_sequences(data_file_name)
     model = build_model(num_units, get_num_classes(data_file_name), loss_fn, learning_rate)
 

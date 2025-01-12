@@ -4,25 +4,27 @@ import json
 import numpy as np
 
 
-KERN_DATASET_PATH = 'data/raw/europa/deutschl/erk'
-ACCEPTABLE_DURATIONS = {0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0}
 SAVE_DIR = 'data/processed'
-SEQUENCE_LENGTH = 64
 
 
 def load(dataset_path: str) -> list[music21.stream.Score]:
-    songs = []
+    scores = []
     for dirpath, _, filenames in os.walk(dataset_path):
         for filename in filenames:
-            if filename.endswith('.krn'):
-                songs.append(music21.converter.parse(os.path.join(dirpath, filename)))
+            if filename.endswith('.krn') or filename.endswith('.abc'):
+                stream = music21.converter.parse(os.path.join(dirpath, filename))
+                if isinstance(stream, music21.stream.Score):
+                    scores.append(stream)
+                elif isinstance(stream, music21.stream.Opus):
+                    for score in stream:
+                        scores.append(score)
 
-    return songs
+    return scores
 
 
-def durations_acceptable(song: music21.stream.Score) -> bool:
+def durations_acceptable(song: music21.stream.Score, acceptable_durations: set[float]) -> bool:
     for note in song.flatten().notesAndRests:
-        if note.quarterLength not in ACCEPTABLE_DURATIONS:
+        if note.quarterLength not in acceptable_durations:
             return False
     return True
         
@@ -59,59 +61,65 @@ def encode_song(song: music21.stream.Score) -> str:
     return ' '.join(map(str, encoded_song))
 
 
-def create_mapping(encoded_songs: str, file_name: str) -> None:
+def create_metadata_file(file_name: str, encoded_songs: str, sequence_length: int) -> None:
+    metadata = {}
+
     vocabulary = list(set(encoded_songs.split()))
     mapping = {symbol: index for index, symbol in enumerate(vocabulary)}
+    
+    metadata['mapping'] = mapping
+    metadata['sequence_length'] = sequence_length
+    metadata['num_classes'] = len(mapping)
 
-    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'w') as file:
-        json.dump(mapping, file)
+    with open(os.path.join(SAVE_DIR, f'{file_name}_metadata.json'), 'w') as file:
+        json.dump(metadata, file)
 
 
 def get_num_classes(data_file_name: str) -> int:
-    with open(os.path.join(SAVE_DIR, f'{data_file_name}_mapping.json'), 'r') as file:
-        mapping = json.load(file)
+    with open(os.path.join(SAVE_DIR, f'{data_file_name}_metadata.json'), 'r') as file:
+        metadata = json.load(file)
 
-    return len(mapping)
+    return metadata['num_classes']
 
 
-def preprocess(dataset_path: str, file_name: str) -> None:
+def preprocess(dataset_path: str, file_name: str, acceptable_durations: set[float], sequence_length: int) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
     result = []
     for song in songs:
-        if durations_acceptable(song):
+        if durations_acceptable(song, acceptable_durations):
             song = transpose_to_concert_pitch(song)
             song = encode_song(song)
 
             result.append(song)
-            result.extend(['/'] * SEQUENCE_LENGTH)
+            result.extend(['/'] * sequence_length)
 
     result = ' '.join(result)
 
     with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'w') as file:
         file.write(result)
 
-    create_mapping(result, file_name)
+    create_metadata_file(file_name, result, sequence_length)
 
 
 def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
     with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'r') as file:
         songs = file.read().split()
 
-    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'r') as file:
-        mapping = json.load(file)
+    with open(os.path.join(SAVE_DIR, f'{file_name}_metadata.json'), 'r') as file:
+        metadata = json.load(file)
 
-    series = [mapping[symbol] for symbol in songs]
+    series = [metadata['mapping'][symbol] for symbol in songs]
     inputs = []
     targets = []
 
-    for i in range(len(series) - SEQUENCE_LENGTH):
-        inputs.append(series[i:i + SEQUENCE_LENGTH])
-        targets.append(series[i + SEQUENCE_LENGTH])
+    for i in range(len(series) - metadata['sequence_length']):
+        inputs.append(series[i:i + metadata['sequence_length']])
+        targets.append(series[i + metadata['sequence_length']])
 
-    identity_matrix = np.eye(len(mapping))
+    identity_matrix = np.eye(metadata['num_classes'])
     inputs = np.array([[identity_matrix[symbol] for symbol in sequence] for sequence in inputs])
     targets = np.array(targets)
 
@@ -119,7 +127,12 @@ def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def main():
-    preprocess(KERN_DATASET_PATH, 'erk')
+    preprocess(
+        dataset_path='data/raw/europa/deutschl/erk',
+        file_name='erk',
+        acceptable_durations={0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0},
+        sequence_length=64
+    )
 
 
 if __name__ == '__main__':
