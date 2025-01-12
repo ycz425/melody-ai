@@ -1,6 +1,7 @@
 import keras
 import json
 import numpy as np
+import music21
 
 class MelodyGenerator:
 
@@ -19,7 +20,24 @@ class MelodyGenerator:
 
         return np.random.choice(range(len(probabilities)), p=scaled_probs)
 
-    def generate_melody(self, seed: list[str], max_steps: int, max_sequence_length: int, temperature: float) -> list[str]:
+    def _convert_to_stream(self, melody: list[str]) -> music21.stream.Part:
+        part = music21.stream.Part()
+        prev = None
+        for symbol in melody:
+            if symbol == '_':
+                prev.quarterLength += 0.25
+            elif symbol == 'r':
+                prev = music21.note.Rest(quarterLength=0.25)
+                part.append(prev)
+            else:
+                prev = music21.note.Note(int(symbol), quarterLength=0.25)
+                part.append(prev)
+        
+        return part
+
+
+
+    def generate_melody(self, seed: list[str], max_steps: int, max_sequence_length: int, temperature: float) -> music21.stream.Score:
         melody = seed
         seed = ['/'] * self._sequence_length + seed
         seed = [self._mapping[symbol] for symbol in seed]
@@ -42,14 +60,14 @@ class MelodyGenerator:
 
             melody.append(output_symbol)
 
-        return melody
+        return self._convert_to_stream(melody)
     
     
 if __name__ == '__main__':
     np.printoptions(threshold=np.inf)
     generator = MelodyGenerator('models/erk_model.keras', 'data/processed/erk_metadata.json')
-    melody = generator.generate_melody(['60'], 1000, 64, 1.0)
-    print(melody)
+    melody = generator.generate_melody(['69'], 1000, 64, 1.5)
+    melody.show()
 
 
 
