@@ -38,6 +38,8 @@ def encode_song(song: music21.stream.Score) -> list[str]:
             symbol = str(event.pitch.midi)
         elif isinstance(event, music21.harmony.ChordSymbol):
             symbol = event.figure.replace(' ', '_')
+            if symbol == encoded_song[-1]:
+                continue
         elif isinstance(event, music21.note.Rest):
             symbol = 'r'
 
