@@ -2,6 +2,7 @@ import os
 import music21
 import json
 import numpy as np
+import xml.etree.ElementTree as ET
 
 
 SAVE_DIR = 'data/processed'
@@ -11,78 +12,60 @@ def load(dataset_path: str) -> list[music21.stream.Score]:
     scores = []
     for dirpath, _, filenames in os.walk(dataset_path):
         for filename in filenames:
-            if filename.endswith('.krn') or filename.endswith('.abc'):
-                stream = music21.converter.parse(os.path.join(dirpath, filename))
-                if isinstance(stream, music21.stream.Score):
-                    scores.append(stream)
-                elif isinstance(stream, music21.stream.Opus):
-                    for score in stream:
-                        scores.append(score)
+            if filename == 'c.xml':
+                tree = ET.parse(os.path.join(dirpath, filename))
+                root = tree.getroot()
+                for harmony in root.findall('.//harmony'):
+                    for frame in harmony.findall('.//frame'):
+                        harmony.remove(frame)
+                scores.append(music21.converter.parse(ET.tostring(root, encoding='unicode'), format='musicxml'))         
 
     return scores
 
 
 def durations_acceptable(song: music21.stream.Score, acceptable_durations: set[float]) -> bool:
-    for note in song.flatten().notesAndRests:
+    for note in song.flatten().getElementsByClass([music21.note.Note, music21.note.Rest]):
         if note.quarterLength not in acceptable_durations:
             return False
     return True
-        
-
-def transpose_to_concert_pitch(song: music21.stream.Score) -> music21.stream.Score:
-    parts = song.getElementsByClass(music21.stream.Part)
-    part0_measures = parts[0].getElementsByClass(music21.stream.Measure)
-    key = part0_measures[0][4]
-
-    if not isinstance(key, music21.key.Key):
-        key = song.analyze('key')
-
-    if key.mode == 'major':
-        interval = music21.interval.Interval(key.tonic, music21.pitch.Pitch('C'))
-    elif key.mode == 'minor':
-        interval = music21.interval.Interval(key.tonic, music21.pitch.Pitch('A'))
-
-    return song.transpose(interval)
 
 
-def encode_song(song: music21.stream.Score) -> str:
+def encode_song(song: music21.stream.Score) -> list[str]:
     encoded_song = []
 
-    for event in song.flatten().notesAndRests:
+    for event in song.flatten().getElementsByClass(['Chord', 'Note', 'Rest']):
         if isinstance(event, music21.note.Note):
-            symbol = event.pitch.midi
+            symbol = str(event.pitch.midi)
+        elif isinstance(event, music21.harmony.ChordSymbol):
+            symbol = event.figure.replace(' ', '_')
         elif isinstance(event, music21.note.Rest):
             symbol = 'r'
 
-        steps = int(event.quarterLength / 0.25)
         encoded_song.append(symbol)
-        encoded_song.extend(['_'] * (steps - 1))
 
-    return ' '.join(map(str, encoded_song))
+        if isinstance(event, (music21.note.Note, music21.note.Rest)):
+            steps = int(event.quarterLength / 0.25)
+            encoded_song.extend(['_'] * (steps - 1))
+
+    return encoded_song
 
 
-def create_metadata_file(file_name: str, encoded_songs: str, sequence_length: int) -> None:
-    metadata = {}
-
-    vocabulary = list(set(encoded_songs.split()))
+def create_mapping(file_name: str, encoded_songs: list[list[str]]) -> None:
+    vocabulary = list(set([symbol for song in encoded_songs for symbol in song]))
     mapping = {symbol: index for index, symbol in enumerate(vocabulary)}
-    
-    metadata['mapping'] = mapping
-    metadata['sequence_length'] = sequence_length
-    metadata['num_classes'] = len(mapping)
 
-    with open(os.path.join(SAVE_DIR, f'{file_name}_metadata.json'), 'w') as file:
-        json.dump(metadata, file)
+    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'w') as file:
+        json.dump(mapping, file, indent=4)
 
 
 def get_num_classes(data_file_name: str) -> int:
-    with open(os.path.join(SAVE_DIR, f'{data_file_name}_metadata.json'), 'r') as file:
-        metadata = json.load(file)
+    with open(os.path.join(SAVE_DIR, f'{data_file_name}_mapping.json'), 'r') as file:
+        mapping = json.load(file)
 
-    return metadata['num_classes']
+    return len(mapping)
 
 
-def preprocess(dataset_path: str, file_name: str, acceptable_durations: set[float], sequence_length: int) -> None:
+def preprocess(dataset_path: str, file_name: str, acceptable_durations: set[float]) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
@@ -90,18 +73,13 @@ def preprocess(dataset_path: str, file_name: str, acceptable_durations: set[floa
     result = []
     for song in songs:
         if durations_acceptable(song, acceptable_durations):
-            song = transpose_to_concert_pitch(song)
-            song = encode_song(song)
-
-            result.append(song)
-            result.extend(['/'] * sequence_length)
-
-    result = ' '.join(result)
-
+            result.append(['[START]'] + encode_song(song) + ['[END]'])
+        
     with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'w') as file:
-        file.write(result)
+        for song in result:
+            file.write(' '.join(song) + '\n')
 
-    create_metadata_file(file_name, result, sequence_length)
+    create_mapping(file_name, result)
 
 
 def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
@@ -128,10 +106,9 @@ def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
 
 def main():
     preprocess(
-        dataset_path='data/raw/europa/deutschl/erk',
-        file_name='erk',
+        dataset_path='data/raw/test',
+        file_name='test',
         acceptable_durations={0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0},
-        sequence_length=64
     )
 
 
