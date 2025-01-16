@@ -38,7 +38,7 @@ def encode_song(song: music21.stream.Score) -> list[str]:
             symbol = str(event.pitch.midi)
         elif isinstance(event, music21.harmony.ChordSymbol):
             symbol = event.figure.replace(' ', '_')
-            if symbol == encoded_song[-1]:
+            if len(encoded_song) > 0 and symbol == encoded_song[-1]:
                 continue
         elif isinstance(event, music21.note.Rest):
             symbol = 'r'
@@ -108,8 +108,8 @@ def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
 
 def main():
     preprocess(
-        dataset_path='data/raw/test',
-        file_name='test',
+        dataset_path='data/raw/chord-melody-dataset-master',
+        file_name='data',
         acceptable_durations={0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0},
     )
 
