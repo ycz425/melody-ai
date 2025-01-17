@@ -32,22 +32,27 @@ def durations_acceptable(song: music21.stream.Score, acceptable_durations: set[f
 
 def encode_song(song: music21.stream.Score) -> list[str]:
     encoded_song = []
+    prev = None
 
     for event in song.flatten().getElementsByClass(['Chord', 'Note', 'Rest']):
         if isinstance(event, music21.note.Note):
             symbol = str(event.pitch.midi)
+            prev = 'note'
         elif isinstance(event, music21.harmony.ChordSymbol):
             symbol = event.figure.replace(' ', '_')
-            if len(encoded_song) > 0 and symbol == encoded_song[-1]:
+            if prev == 'chord':
                 continue
+            prev = 'chord'
         elif isinstance(event, music21.note.Rest):
             symbol = 'r'
+            prev = 'note'
 
         encoded_song.append(symbol)
 
         if isinstance(event, (music21.note.Note, music21.note.Rest)):
             steps = int(event.quarterLength / 0.25)
             encoded_song.extend(['_'] * (steps - 1))
+            prev = 'note'
 
     return encoded_song
 
