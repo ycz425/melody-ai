@@ -8,8 +8,8 @@ import xml.etree.ElementTree as ET
 SAVE_DIR = 'data/processed'
 
 
-def load(dataset_path: str) -> list[music21.stream.Score]:
-    scores = []
+def load(dataset_path: str) -> dict[str, music21.stream.Score]:
+    scores = {}
     for dirpath, _, filenames in os.walk(dataset_path):
         for filename in filenames:
             if filename == 'c.xml':
@@ -18,7 +18,7 @@ def load(dataset_path: str) -> list[music21.stream.Score]:
                 for harmony in root.findall('.//harmony'):
                     for frame in harmony.findall('.//frame'):
                         harmony.remove(frame)
-                scores.append(music21.converter.parse(ET.tostring(root, encoding='unicode'), format='musicxml'))         
+                scores[dirpath] = (music21.converter.parse(ET.tostring(root, encoding='unicode'), format='musicxml'))         
 
     return scores
 
@@ -52,36 +52,42 @@ def encode_song(song: music21.stream.Score) -> list[str]:
     return encoded_song
 
 
-def create_mapping(file_name: str, encoded_songs: list[list[str]]) -> None:
+def create_metadata(dir_name: str, encoded_songs: list[list[str]], dir_paths: list[str]) -> None:
     vocabulary = list(set([symbol for song in encoded_songs for symbol in song]))
-    mapping = {symbol: index for index, symbol in enumerate(vocabulary)}
+    metadata = {}
+    metadata['mapping'] = {symbol: index for index, symbol in enumerate(vocabulary)}
+    metadata['dir_paths'] = dir_paths
 
-    with open(os.path.join(SAVE_DIR, f'{file_name}_mapping.json'), 'w') as file:
-        json.dump(mapping, file, indent=4)
-
-
-def get_num_classes(data_file_name: str) -> int:
-    with open(os.path.join(SAVE_DIR, f'{data_file_name}_mapping.json'), 'r') as file:
-        mapping = json.load(file)
-
-    return len(mapping)
+    os.makedirs(os.path.join(SAVE_DIR, dir_name), exist_ok=True)
+    with open(os.path.join(SAVE_DIR, f'{dir_name}/metadata.json'), 'w') as file:
+        json.dump(metadata, file, indent=4)
 
 
-def preprocess(dataset_path: str, file_name: str, acceptable_durations: set[float]) -> None:
+def get_num_classes(dir_name: str) -> int:
+    with open(os.path.join(SAVE_DIR, f'{dir_name}/metadata.json'), 'r') as file:
+        metadata = json.load(file)
+
+    return len(metadata['mapping'])
+
+
+def preprocess(dataset_path: str, dir_name: str, acceptable_durations: set[float]) -> None:
     print('Loading songs...')
     songs = load(dataset_path)
     print(f'Loaded {len(songs)} songs.')
 
     result = []
-    for song in songs:
-        if durations_acceptable(song, acceptable_durations):
-            result.append(['[START]'] + encode_song(song) + ['[END]'])
-        
-    with open(os.path.join(SAVE_DIR, f'{file_name}.txt'), 'w') as file:
+    dir_paths = []
+    for path in songs:
+        if durations_acceptable(songs[path], acceptable_durations):
+            result.append(['[START]'] + encode_song(songs[path]) + ['[END]'])
+            dir_paths.append(path)
+
+    os.makedirs(os.path.join(SAVE_DIR, dir_name), exist_ok=True)
+    with open(os.path.join(SAVE_DIR, f'{dir_name}/encodings.txt'), 'w') as file:
         for song in result:
             file.write(' '.join(song) + '\n')
 
-    create_mapping(file_name, result)
+    create_metadata(dir_name, result, dir_paths)
 
 
 def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
@@ -109,7 +115,7 @@ def get_train_sequences(file_name: str) -> tuple[np.ndarray, np.ndarray]:
 def main():
     preprocess(
         dataset_path='data/raw/chord-melody-dataset-master',
-        file_name='data',
+        dir_name='data',
         acceptable_durations={0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0},
     )
 
