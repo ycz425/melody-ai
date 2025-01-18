@@ -18,7 +18,7 @@ def load(dataset_path: str) -> dict[str, music21.stream.Score]:
                 for harmony in root.findall('.//harmony'):
                     for frame in harmony.findall('.//frame'):
                         harmony.remove(frame)
-                scores[dirpath] = (music21.converter.parse(ET.tostring(root, encoding='unicode'), format='musicxml'))         
+                scores[dirpath] = (music21.converter.parse(ET.tostring(root, encoding='unicode'), format='musicxml')) 
 
     return scores
 
@@ -32,28 +32,26 @@ def durations_acceptable(song: music21.stream.Score, acceptable_durations: set[f
 
 def encode_song(song: music21.stream.Score) -> list[str]:
     encoded_song = []
-    prev = None
 
-    for event in song.flatten().getElementsByClass(['Chord', 'Note', 'Rest']):
-        if isinstance(event, music21.note.Note):
-            symbol = str(event.pitch.midi)
-            prev = 'note'
-        elif isinstance(event, music21.harmony.ChordSymbol):
-            symbol = event.figure.replace(' ', '_')
-            if prev == 'chord':
-                continue
-            prev = 'chord'
-        elif isinstance(event, music21.note.Rest):
-            symbol = 'r'
-            prev = 'note'
+    for note in song.flatten().getElementsByClass(['Note', 'Rest']):
+        if isinstance(note, music21.note.Note):
+            if note.tie and note.tie.type == 'stop':
+                encoded_song.append('_')
+            else:
+                encoded_song.append(str(note.pitch.midi))
+        elif isinstance(note, music21.note.Rest):
+            encoded_song.append('r')
 
-        encoded_song.append(symbol)
+        encoded_song.extend(['_'] * (int(note.quarterLength / 0.25) - 1))
 
-        if isinstance(event, (music21.note.Note, music21.note.Rest)):
-            steps = int(event.quarterLength / 0.25)
-            encoded_song.extend(['_'] * (steps - 1))
-            prev = 'note'
+    if all(s in {'r', '_'} for s in encoded_song[:16]):
+        encoded_song = encoded_song[16:]
 
+    i = 0
+    for chord in song.flatten().getElementsByClass('Chord'):
+        encoded_song.insert(i, chord.figure.replace(' ', '_'))
+        i += 9
+        
     return encoded_song
 
 
